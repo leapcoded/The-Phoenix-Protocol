@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="800" viewBox="0 0 400 800">
+  <rect width="100%" height="100%" fill="#071322" />
+  <g transform="translate(50,50)">
+    <rect x="0" y="0" width="300" height="140" fill="#0f172a" stroke="#1e293b" />
+    <text x="150" y="78" font-family="Inter, Arial, sans-serif" font-size="22" fill="#93c5fd" text-anchor="middle">Luminary</text>
+
+    <rect x="0" y="160" width="300" height="140" fill="#0b1220" stroke="#16202b" />
+    <text x="150" y="230" font-family="Inter, Arial, sans-serif" font-size="20" fill="#8ab4f8" text-anchor="middle">Nexus</text>
+
+    <rect x="0" y="320" width="300" height="200" fill="#08121a" stroke="#0f1724" />
+    <text x="150" y="420" font-family="Inter, Arial, sans-serif" font-size="20" fill="#7fb3f7" text-anchor="middle">Sprawl</text>
+
+    <rect x="0" y="540" width="300" height="200" fill="#03060a" stroke="#071018" />
+    <text x="150" y="640" font-family="Inter, Arial, sans-serif" font-size="20" fill="#6ea6f6" text-anchor="middle">Abyss</text>
+
+    <text x="150" y="740" font-family="Inter, Arial, sans-serif" font-size="12" fill="#9fbffb" text-anchor="middle">Elevation = Social Status</text>
+  </g>
+</svg>
