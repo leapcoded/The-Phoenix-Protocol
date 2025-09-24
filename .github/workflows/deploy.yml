@@ -1,0 +1,32 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v4
+
+      - name: Inject Firebase Config 🤫
+        run: |
+          sed -i "s|%%API_KEY%%|${{ secrets.FIREBASE_API_KEY }}|" firebaseConfig.js
+          sed -i "s|%%AUTH_DOMAIN%%|${{ secrets.FIREBASE_AUTH_DOMAIN }}|" firebaseConfig.js
+          sed -i "s|%%PROJECT_ID%%|${{ secrets.FIREBASE_PROJECT_ID }}|" firebaseConfig.js
+          sed -i "s|%%STORAGE_BUCKET%%|${{ secrets.FIREBASE_STORAGE_BUCKET }}|" firebaseConfig.js
+          sed -i "s|%%MESSAGING_SENDER_ID%%|${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}|" firebaseConfig.js
+          sed -i "s|%%APP_ID%%|${{ secrets.FIREBASE_APP_ID }}|" script.js
+          sed -i "s|%%MEASUREMENT_ID%%|${{ secrets.FIREBASE_MEASUREMENT_ID }}|" firebaseConfig.js
+
+      - name: Deploy 🚀
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
+          publish_branch: gh-pages
