@@ -14,15 +14,26 @@ jobs:
       - name: Checkout 🛎️
         uses: actions/checkout@v4
 
-      - name: Inject Firebase Config 🤫
+      - name: Create Firebase Config 🤫
         run: |
-          sed -i "s|%%API_KEY%%|${{ secrets.FIREBASE_API_KEY }}|" src/firebaseConfig.js
-          sed -i "s|%%AUTH_DOMAIN%%|${{ secrets.FIREBASE_AUTH_DOMAIN }}|" src/firebaseConfig.js
-          sed -i "s|%%PROJECT_ID%%|${{ secrets.FIREBASE_PROJECT_ID }}|" src/firebaseConfig.js
-          sed -i "s|%%STORAGE_BUCKET%%|${{ secrets.FIREBASE_STORAGE_BUCKET }}|" src/firebaseConfig.js
-          sed -i "s|%%MESSAGING_SENDER_ID%%|${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}|" src/firebaseConfig.js
-          sed -i "s|%%APP_ID%%|${{ secrets.FIREBASE_APP_ID }}|" src/firebaseConfig.js
-          sed -i "s|%%MEASUREMENT_ID%%|${{ secrets.FIREBASE_MEASUREMENT_ID }}|" src/firebaseConfig.js
+          cat > src/firebaseConfig.js << 'EOF'
+          export const firebaseConfig = {
+            apiKey: "${{ secrets.FIREBASE_API_KEY }}",
+            authDomain: "${{ secrets.FIREBASE_AUTH_DOMAIN }}",
+            projectId: "${{ secrets.FIREBASE_PROJECT_ID }}",
+            storageBucket: "${{ secrets.FIREBASE_STORAGE_BUCKET }}",
+            messagingSenderId: "${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}",
+            appId: "${{ secrets.FIREBASE_APP_ID }}",
+            measurementId: "${{ secrets.FIREBASE_MEASUREMENT_ID }}"
+          };
+          EOF
+
+      - name: Verify Firebase config injection
+        run: |
+          node -e "console.log(require('fs').readFileSync('src/firebaseConfig.js','utf8'))"
+          if grep -q '%%' src/firebaseConfig.js; then
+            echo 'Error: placeholders remain in src/firebaseConfig.js'; exit 1;
+          fi
 
       - name: Deploy 🚀
         uses: peaceiris/actions-gh-pages@v4
