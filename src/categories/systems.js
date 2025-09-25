@@ -87,6 +87,20 @@ function renderModuleView() {
         </div>
       </div>
 
+      <div id="system-edge-inspector" style="position:fixed; bottom:16px; right:300px; z-index:2147483647; min-width:240px; display:none; background:linear-gradient(180deg, rgba(2,6,23,0.8), rgba(2,6,23,0.6)); border:1px solid rgba(148,163,184,0.2); border-radius:12px; padding:10px; box-shadow:0 14px 40px rgba(2,6,23,0.6); color:#e2e8f0;">
+        <div style="font-weight:600; font-size:14px; margin-bottom:6px;">Edge Inspector</div>
+        <div style="display:grid; grid-template-columns:1fr; gap:8px;">
+          <div>
+            <label style="display:block; font-size:12px; color:#cbd5e1; margin-bottom:3px;">Label</label>
+            <input id="sys-edge-label" type="text" style="width:100%; padding:6px 8px; background:#0b1220; color:#e2e8f0; border:1px solid #334155; border-radius:8px;"/>
+          </div>
+          <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button id="sys-edge-delete" class="px-2 py-1 text-xs" style="background:#7f1d1d; color:#fecaca; border:1px solid #7f1d1d; border-radius:8px;">Delete</button>
+            <button id="sys-edge-close" class="px-2 py-1 text-xs" style="background:#111827; color:#cbd5e1; border:1px solid #334155; border-radius:8px;">Close</button>
+          </div>
+        </div>
+      </div>
+
       <div id="system-new-modal" style="display:none; position:fixed; inset:0; z-index:2147483647;">
         <div style="position:absolute; inset:0; background:rgba(0,0,0,0.6);"></div>
         <div style="position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); width:min(92vw, 640px); background:linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04)); border:1px solid rgba(255,255,255,0.18); border-radius:14px; box-shadow:0 24px 60px rgba(2,6,23,0.6); backdrop-filter: blur(22px) saturate(150%); -webkit-backdrop-filter: blur(22px) saturate(150%); padding:16px;">
@@ -136,6 +150,11 @@ function init() {
   const inOpen = document.getElementById('sys-node-open');
   const inDelete = document.getElementById('sys-node-delete');
   const inClose = document.getElementById('sys-node-close');
+  // Edge inspector elements
+  const edgeInspector = document.getElementById('system-edge-inspector');
+  const edgeLabelInput = document.getElementById('sys-edge-label');
+  const edgeDeleteBtn = document.getElementById('sys-edge-delete');
+  const edgeCloseBtn = document.getElementById('sys-edge-close');
 
   function populateList() {
     if (!selectEl) return;
@@ -253,6 +272,7 @@ function init() {
 
   // Inspector events
   if (inClose) inClose.addEventListener('click', () => { if (inspector) inspector.style.display = 'none'; if (container) container._selectedNodeId = null; });
+  if (edgeCloseBtn) edgeCloseBtn.addEventListener('click', ()=>{ if (edgeInspector) edgeInspector.style.display='none'; if (container) container._selectedEdgeId=null; });
   if (inDelete) inDelete.addEventListener('click', () => {
     const st = (container && container._systemState) || null; if (!st) return;
     const id = container._selectedNodeId; if (!id) return;
@@ -262,10 +282,24 @@ function init() {
     try { localStorage.setItem('lastSystemState', serializeSystem(st)); } catch(_){}
     if (container._requestDraw) container._requestDraw();
   });
+  if (edgeDeleteBtn) edgeDeleteBtn.addEventListener('click', ()=>{
+    const st = (container && container._systemState) || null; if (!st) return;
+    const eid = container._selectedEdgeId; if (!eid) return;
+    st.edges = (st.edges||[]).filter(e => e.id !== eid);
+    container._selectedEdgeId = null; if (edgeInspector) edgeInspector.style.display='none';
+    try { localStorage.setItem('lastSystemState', serializeSystem(st)); } catch(_){ }
+    if (container._requestDraw) container._requestDraw();
+  });
   if (inLabel) inLabel.addEventListener('input', () => {
     const st = (container && container._systemState) || null; if (!st) return; const id = container._selectedNodeId; if (!id) return;
     const n = (st.nodes||[]).find(x => x.id === id); if (!n) return; n.label = inLabel.value;
     try { localStorage.setItem('lastSystemState', serializeSystem(st)); } catch(_){}
+    if (container._requestDraw) container._requestDraw();
+  });
+  if (edgeLabelInput) edgeLabelInput.addEventListener('input', ()=>{
+    const st = (container && container._systemState) || null; if (!st) return; const eid = container._selectedEdgeId; if (!eid) return;
+    const ed = (st.edges||[]).find(e => e.id === eid); if (!ed) return; ed.label = edgeLabelInput.value || '';
+    try { localStorage.setItem('lastSystemState', serializeSystem(st)); } catch(_){ }
     if (container._requestDraw) container._requestDraw();
   });
   if (inPage) inPage.addEventListener('input', () => {
@@ -352,16 +386,21 @@ function setupSystemCanvas(container, systemObj, initialTool) {
       if (!from || !to) return;
       const x1 = offsetX + from.x * scale; const y1 = offsetY + from.y * scale;
       const x2 = offsetX + to.x * scale; const y2 = offsetY + to.y * scale;
-      ctx.strokeStyle = 'rgba(236,72,153,0.85)'; ctx.lineWidth = 2;
+      const selected = container._selectedEdgeId === e.id;
+      ctx.strokeStyle = selected ? '#fbbf24' : 'rgba(236,72,153,0.85)'; ctx.lineWidth = selected ? 3 : 2;
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-      // draw small arrowhead
+      // arrowhead
       const ang = Math.atan2(y2 - y1, x2 - x1);
       const ah = 8; const aw = 5;
       ctx.beginPath();
       ctx.moveTo(x2, y2);
       ctx.lineTo(x2 - ah*Math.cos(ang) + aw*Math.sin(ang), y2 - ah*Math.sin(ang) - aw*Math.cos(ang));
       ctx.lineTo(x2 - ah*Math.cos(ang) - aw*Math.sin(ang), y2 - ah*Math.sin(ang) + aw*Math.cos(ang));
-      ctx.closePath(); ctx.fillStyle = 'rgba(236,72,153,0.85)'; ctx.fill();
+      ctx.closePath(); ctx.fillStyle = selected ? '#fbbf24' : 'rgba(236,72,153,0.85)'; ctx.fill();
+      // label (midpoint) if present
+      if (e.label) {
+        const mx = (x1 + x2)/2; const my = (y1 + y2)/2; ctx.fillStyle = selected ? '#fbbf24' : '#94a3b8'; ctx.font = '11px sans-serif'; ctx.textAlign='center'; ctx.fillText(e.label, mx, my - 6);
+      }
     });
     ctx.restore();
     // nodes
@@ -392,6 +431,26 @@ function setupSystemCanvas(container, systemObj, initialTool) {
     return { hit, worldX, worldY };
   }
 
+  function hitEdgeAtClient(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left; const y = clientY - rect.top;
+    const worldX = (x - offsetX) / scale; const worldY = (y - offsetY) / scale;
+    let edgeHit = null; let minDist = Infinity;
+    (systemObj.edges||[]).forEach(e => {
+      const from = (systemObj.nodes||[]).find(n => n.id === e.from);
+      const to = (systemObj.nodes||[]).find(n => n.id === e.to);
+      if (!from || !to) return;
+      // distance from point to segment (world coordinates)
+      const x1 = from.x, y1 = from.y, x2 = to.x, y2 = to.y;
+      const A = worldX - x1; const B = worldY - y1; const C = x2 - x1; const D = y2 - y1;
+      const dot = A*C + B*D; const lenSq = C*C + D*D; let param = -1; if (lenSq !== 0) param = dot / lenSq; let xx, yy;
+      if (param < 0) { xx = x1; yy = y1; } else if (param > 1) { xx = x2; yy = y2; } else { xx = x1 + param * C; yy = y1 + param * D; }
+      const dx = worldX - xx; const dy = worldY - yy; const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < (12/scale) && dist < minDist) { minDist = dist; edgeHit = e; }
+    });
+    return { edgeHit, worldX, worldY };
+  }
+
   canvas.addEventListener('mousedown', (e)=>{
     startX=e.clientX; startY=e.clientY; moved=false; isPanning=false; dragNodeId=null;
     const tool = container._systemTool || 'pan';
@@ -400,14 +459,27 @@ function setupSystemCanvas(container, systemObj, initialTool) {
       isPanning = true;
     } else if (tool === 'select') {
       if (hit) {
-        container._selectedNodeId = hit.id; dragNodeId = hit.id; dragStart = { x: worldX - hit.x, y: worldY - hit.y };
+        container._selectedNodeId = hit.id; container._selectedEdgeId = null; dragNodeId = hit.id; dragStart = { x: worldX - hit.x, y: worldY - hit.y };
         const insp = document.getElementById('system-node-inspector'); if (insp) insp.style.display='block';
+        const einsp = document.getElementById('system-edge-inspector'); if (einsp) einsp.style.display='none';
         const inLabel = document.getElementById('sys-node-label'); if (inLabel) inLabel.value = hit.label || '';
         const inPage = document.getElementById('sys-node-page'); if (inPage) inPage.value = hit.page || '';
         requestDraw();
       } else {
-        container._selectedNodeId = null; const insp = document.getElementById('system-node-inspector'); if (insp) insp.style.display='none';
-        isPanning = true; // empty space drag pans
+        // try edge
+        const { edgeHit } = hitEdgeAtClient(e.clientX, e.clientY);
+        if (edgeHit) {
+          container._selectedEdgeId = edgeHit.id; container._selectedNodeId = null; dragNodeId = null;
+          const einsp = document.getElementById('system-edge-inspector'); if (einsp) einsp.style.display='block';
+          const insp = document.getElementById('system-node-inspector'); if (insp) insp.style.display='none';
+          const edgeLabel = document.getElementById('sys-edge-label'); if (edgeLabel) edgeLabel.value = edgeHit.label || '';
+          requestDraw();
+        } else {
+          container._selectedNodeId = null; container._selectedEdgeId = null;
+          const insp = document.getElementById('system-node-inspector'); if (insp) insp.style.display='none';
+          const einsp = document.getElementById('system-edge-inspector'); if (einsp) einsp.style.display='none';
+          isPanning = true; // empty space drag pans
+        }
       }
     } else if (tool === 'connect') {
       if (hit) { connectStartId = hit.id; }
@@ -456,13 +528,26 @@ function setupSystemCanvas(container, systemObj, initialTool) {
         return { hit: found };
       })();
       if (hit) {
-        container._selectedNodeId = hit.id;
+        container._selectedNodeId = hit.id; container._selectedEdgeId = null;
         const insp = document.getElementById('system-node-inspector'); if (insp) insp.style.display='block';
+        const einsp = document.getElementById('system-edge-inspector'); if (einsp) einsp.style.display='none';
         const inLabel = document.getElementById('sys-node-label'); if (inLabel) inLabel.value = hit.label || '';
         const inPage = document.getElementById('sys-node-page'); if (inPage) inPage.value = hit.page || '';
         requestDraw();
       } else {
-        container._selectedNodeId = null; const insp = document.getElementById('system-node-inspector'); if (insp) insp.style.display='none'; requestDraw();
+        const { edgeHit } = hitEdgeAtClient(e.clientX, e.clientY);
+        if (edgeHit) {
+          container._selectedEdgeId = edgeHit.id; container._selectedNodeId = null;
+            const einsp = document.getElementById('system-edge-inspector'); if (einsp) einsp.style.display='block';
+            const insp = document.getElementById('system-node-inspector'); if (insp) insp.style.display='none';
+            const edgeLabel = document.getElementById('sys-edge-label'); if (edgeLabel) edgeLabel.value = edgeHit.label || '';
+            requestDraw();
+        } else {
+          container._selectedNodeId = null; container._selectedEdgeId = null;
+          const insp = document.getElementById('system-node-inspector'); if (insp) insp.style.display='none';
+          const einsp = document.getElementById('system-edge-inspector'); if (einsp) einsp.style.display='none';
+          requestDraw();
+        }
       }
     }
   });
