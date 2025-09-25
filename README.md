@@ -64,6 +64,21 @@ export const firebaseConfig = {
 };
 ```
 
+### GitHub Actions Secrets Injection
+In this repository the file `src/firebaseConfig.js` contains placeholder tokens like `%%API_KEY%%`. During the Pages deploy workflow (`.github/workflows/deploy.yml`), these tokens are replaced with repository secrets. Configure the following secrets under Settings → Secrets and variables → Actions:
+
+| Secret Name | Maps To Token | Required |
+|-------------|---------------|----------|
+| FIREBASE_API_KEY | %%API_KEY%% | Yes |
+| FIREBASE_AUTH_DOMAIN | %%AUTH_DOMAIN%% | Yes |
+| FIREBASE_PROJECT_ID | %%PROJECT_ID%% | Yes |
+| FIREBASE_STORAGE_BUCKET | %%STORAGE_BUCKET%% | Yes |
+| FIREBASE_MESSAGING_SENDER_ID | %%MESSAGING_SENDER_ID%% | Yes |
+| FIREBASE_APP_ID | %%APP_ID%% | Yes |
+| FIREBASE_MEASUREMENT_ID | %%MEASUREMENT_ID%% | Optional (omit for Analytics) |
+
+On local development (opening `index.html` directly) these placeholders remain and Firebase init will warn but not work until replaced — use a local untracked file if you need live local Firebase before deployment.
+
 Security rules (conceptual starting point – tighten as needed):
 ```js
 // Firestore (rules)
