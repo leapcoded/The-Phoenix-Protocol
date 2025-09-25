@@ -99,13 +99,21 @@ function renderView(ctx) {
       </div>
       <div id="map-image-preview" class="w-full h-full bg-gray-800 rounded" style="position:relative; overflow:hidden; border:1px solid #333;"></div>
 
-      <div id="map-categories-panel" style="display:none; position:fixed; top:56px; right:12px; z-index:2147483647; background:linear-gradient(180deg, rgba(2,6,23,0.9), rgba(2,6,23,0.8)); border:1px solid rgba(148,163,184,0.08); border-radius:10px; padding:10px; color:#e2e8f0;">
+      <div id="map-categories-panel" style="display:none; position:fixed; top:56px; right:12px; z-index:2147483647; background:linear-gradient(180deg, rgba(2,6,23,0.9), rgba(2,6,23,0.8)); border:1px solid rgba(148,163,184,0.08); border-radius:10px; padding:10px; color:#e2e8f0; max-width:320px;">
         <div style="font-weight:600; margin-bottom:6px;">Marker Categories</div>
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          <label><input type="checkbox" data-cat="location" checked/> Location</label>
-          <label><input type="checkbox" data-cat="home" checked/> Home</label>
-          <label><input type="checkbox" data-cat="feature" checked/> Feature</label>
-          <label><input type="checkbox" data-cat="character" checked/> Character</label>
+        <div id="map-categories-list" style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow:auto; padding-bottom:6px;">
+          <!-- category checkboxes injected here -->
+        </div>
+        <div style="margin-top:8px; border-top:1px solid rgba(148,163,184,0.04); padding-top:8px;">
+          <div style="font-size:12px; color:#cbd5e1; margin-bottom:6px;">Create category</div>
+          <div style="display:grid; grid-template-columns: 1fr auto; gap:6px; align-items:center;">
+            <input id="map-new-cat-name" placeholder="name (no spaces)" style="padding:6px; background:#081023; border:1px solid #334155; color:#e2e8f0; border-radius:6px;" />
+            <input id="map-new-cat-color" type="color" value="#3b82f6" title="color" style="width:44px; height:34px; padding:0; border-radius:6px; border:1px solid #334155; background:#081023;" />
+          </div>
+          <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
+            <input id="map-new-cat-icon" placeholder="icon (emoji)" style="width:64px; padding:6px; background:#081023; border:1px solid #334155; color:#e2e8f0; border-radius:6px;" />
+            <button id="map-new-cat-add" class="px-2 py-1 text-xs" style="background:#059669; color:white; border:1px solid #065f46; border-radius:8px;">Add</button>
+          </div>
         </div>
       </div>
 
@@ -447,6 +455,25 @@ function setupMapCanvas(container, mapObj, initialTool) {
   container._selectedMarkerId = container._selectedMarkerId || null;
   // default visible categories
   container._visibleCategories = container._visibleCategories || { location:true, home:true, feature:true, character:true };
+  // category metadata: { type: { color, icon } }
+  container._categoryMeta = container._categoryMeta || null;
+  function loadCategoryMeta(){
+    try {
+      const raw = localStorage.getItem('map_custom_categories');
+      const parsed = raw ? JSON.parse(raw) : null;
+      const defaults = {
+        location: { color: '#3b82f6', icon: '📍' },
+        home: { color: '#f59e0b', icon: '🏠' },
+        feature: { color: '#10b981', icon: '⭐' },
+        character: { color: '#ec4899', icon: '👤' }
+      };
+      container._categoryMeta = Object.assign({}, defaults, parsed || {});
+    } catch(_) { container._categoryMeta = {
+      location: { color: '#3b82f6', icon: '📍' }, home: { color: '#f59e0b', icon: '🏠' }, feature: { color: '#10b981', icon: '⭐' }, character: { color: '#ec4899', icon: '👤' }
+    }; }
+  }
+  function saveCategoryMeta(){ try { localStorage.setItem('map_custom_categories', JSON.stringify(container._categoryMeta || {})); } catch(_){} }
+  loadCategoryMeta();
 
   function resizeCanvas() {
     const rect = container.getBoundingClientRect();
@@ -467,15 +494,16 @@ function setupMapCanvas(container, mapObj, initialTool) {
       if (!(container._visibleCategories && container._visibleCategories[m.type])) return;
       const px = offsetX + (m.x * iw) * scale;
       const py = offsetY + (m.y * ih) * scale;
-      let color = 'rgba(59,130,246,0.9)';
-      if (m.type === 'home') color = 'rgba(234,179,8,0.95)';
-      else if (m.type === 'feature') color = 'rgba(16,185,129,0.95)';
-      else if (m.type === 'character') color = 'rgba(236,72,153,0.95)';
-      else if (m.type === 'location') color = 'rgba(59,130,246,0.95)';
-      ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI*2); ctx.fill();
-      // label small
-      if (m.label) { ctx.fillStyle = '#e2e8f0'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(m.label, px, py - 12); }
+  // determine color/icon from category meta or marker override
+  const cat = (container._categoryMeta && container._categoryMeta[m.type]) || {};
+  const color = m.color || cat.color || '#3b82f6';
+  const icon = m.icon || cat.icon || '';
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(px, py, 10, 0, Math.PI*2); ctx.fill();
+  // draw icon if present
+  if (icon) { ctx.fillStyle = '#071224'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(icon, px, py + 5); }
+  // label small
+  if (m.label) { ctx.fillStyle = '#e2e8f0'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(m.label, px, py - 16); }
       // selection highlight
       if (container._selectedMarkerId === m.id) { ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 12, 0, Math.PI*2); ctx.stroke(); }
     });
@@ -607,13 +635,45 @@ function setupMapCanvas(container, mapObj, initialTool) {
   const catsToggle = container.parentElement && container.parentElement.querySelector && container.parentElement.querySelector('#map-cats-toggle');
   const catsPanel = document.getElementById('map-categories-panel');
   if (catsToggle) catsToggle.addEventListener('click', ()=>{ if (catsPanel) catsPanel.style.display = (catsPanel.style.display === 'none' ? 'block' : 'none'); });
-  if (catsPanel) {
-    catsPanel.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-      cb.addEventListener('change', ()=>{
-        const cat = cb.getAttribute('data-cat'); container._visibleCategories[cat] = cb.checked; try { localStorage.setItem('map_visible_cats', JSON.stringify(container._visibleCategories)); } catch(_){}
-        requestDraw();
-      });
+  function renderCategoryList(){
+    if (!catsPanel) return;
+    const list = document.getElementById('map-categories-list'); if (!list) return; list.innerHTML = '';
+    const meta = container._categoryMeta || {};
+    Object.keys(meta).forEach(k => {
+      const it = meta[k];
+      const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.justifyContent='space-between';
+      const left = document.createElement('div'); left.innerHTML = `<label style="display:flex; gap:8px; align-items:center;"><input type=checkbox data-cat="${k}" ${container._visibleCategories[k] ? 'checked' : ''}/> <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;background:${it.color};color:#071224">${it.icon||''}</span> <strong style="font-size:13px;color:#e2e8f0;margin-left:6px">${k}</strong></span></label>`;
+      const right = document.createElement('div'); right.innerHTML = `<button data-edit-cat="${k}" style="background:#0f172a;border:1px solid #334155;color:#93c5fd;padding:4px 8px;border-radius:6px;font-size:12px">Edit</button>`;
+      row.appendChild(left); row.appendChild(right); list.appendChild(row);
     });
+    // attach listeners
+    list.querySelectorAll('input[type=checkbox]').forEach(cb=>{ cb.addEventListener('change', ()=>{ const cat = cb.getAttribute('data-cat'); container._visibleCategories[cat] = cb.checked; try { localStorage.setItem('map_visible_cats', JSON.stringify(container._visibleCategories)); } catch(_){} requestDraw(); }); });
+    list.querySelectorAll('button[data-edit-cat]').forEach(btn=>{ btn.addEventListener('click', ()=>{ const k = btn.getAttribute('data-edit-cat'); openEditCategory(k); }); });
+  }
+  function openEditCategory(key){
+    const modalName = document.getElementById('map-new-cat-name'); const modalColor = document.getElementById('map-new-cat-color'); const modalIcon = document.getElementById('map-new-cat-icon');
+    if (!modalName || !modalColor || !modalIcon) return; modalName.value = key; modalName.disabled = true; const meta = container._categoryMeta && container._categoryMeta[key] || {}; modalColor.value = meta.color || '#3b82f6'; modalIcon.value = meta.icon || '';
+    // reuse add area as edit; change button behavior
+    const addBtn = document.getElementById('map-new-cat-add'); addBtn.textContent = 'Update';
+    function doUpdate(){ const name = modalName.value.trim(); if (!name) return; container._categoryMeta[name] = { color: modalColor.value, icon: modalIcon.value }; saveCategoryMeta(); renderCategoryList(); addBtn.textContent = 'Add'; modalName.disabled = false; modalName.value=''; modalIcon.value=''; modalColor.value='#3b82f6'; }
+    addBtn.onclick = ()=>{ doUpdate(); addBtn.onclick=null; };
+  }
+  if (catsPanel) {
+    // init new-cat handlers
+    const add = document.getElementById('map-new-cat-add'); const newName = document.getElementById('map-new-cat-name'); const newColor = document.getElementById('map-new-cat-color'); const newIcon = document.getElementById('map-new-cat-icon');
+    if (add && newName && newColor && newIcon) {
+      add.addEventListener('click', ()=>{
+        const name = (newName.value||'').trim(); if (!name) { alert('Enter a category name'); return; }
+        // normalize name (no spaces)
+        const key = name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'');
+        container._categoryMeta = container._categoryMeta || {};
+        container._categoryMeta[key] = { color: newColor.value || '#3b82f6', icon: newIcon.value || '' };
+        container._visibleCategories[key] = true;
+        saveCategoryMeta(); renderCategoryList(); try { localStorage.setItem('map_visible_cats', JSON.stringify(container._visibleCategories)); } catch(_){}
+        newName.value=''; newIcon.value=''; newColor.value='#3b82f6';
+      });
+    }
+    renderCategoryList();
   }
 
   if (mapObj.imageUrl) {
