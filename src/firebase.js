@@ -1,5 +1,21 @@
 import { firebaseConfig } from './firebaseConfig.js';
 
+// Runtime guard: detect if deployment failed to inject Firebase secrets
+function isPlaceholderConfig(cfg) {
+    if (!cfg) return true;
+    return Object.keys(cfg).some(k => typeof cfg[k] === 'string' && cfg[k].startsWith('%%'));
+}
+
+if (isPlaceholderConfig(firebaseConfig)) {
+    console.error('[Firebase] Placeholder config detected – Google Auth will fail. Ensure GitHub Actions secrets are configured and Pages is set to deploy via Actions.');
+    try {
+        const warn = document.createElement('div');
+        warn.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#7f1d1d;color:#fecaca;padding:8px 14px;font:14px/1.4 system-ui,\n sans-serif;box-shadow:0 2px 6px rgba(0,0,0,0.4)';
+        warn.innerHTML = '<strong>Firebase config not injected.</strong> Login disabled. (Placeholders still present)';
+        document.body.appendChild(warn);
+    } catch(_) {}
+}
+
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
