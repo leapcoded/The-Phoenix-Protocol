@@ -80,11 +80,13 @@ function renderView(ctx) {
   <select id="map-select" class="px-2 py-1 bg-gray-800 text-gray-200 rounded"></select>
   <select id="map-tool" class="px-2 py-1 bg-gray-800 text-gray-200 rounded" title="Tool">
     <option value="pan">🖐️ Pan</option>
+    <option value="select">🔎 Select/Move</option>
     <option value="location">📍 Location</option>
     <option value="home">🏠 Home</option>
     <option value="feature">⭐ Feature</option>
     <option value="character">👤 Character</option>
   </select>
+  <button id="map-cats-toggle" class="px-2 py-1 text-sm text-gray-300 border border-gray-700 rounded">Categories</button>
   <button id="map-center" class="px-2 py-1 text-sm text-sky-300 border border-gray-700 rounded">Centre</button>
   <button id="map-zoom-out" class="px-2 py-1 text-sm text-gray-300 border border-gray-700 rounded">-</button>
   <span id="map-zoom" class="text-xs text-gray-300">100%</span>
@@ -96,6 +98,35 @@ function renderView(ctx) {
   <button id="map-close" class="px-2 py-1 text-sm text-red-400 border border-gray-700 rounded">Close</button>
       </div>
       <div id="map-image-preview" class="w-full h-full bg-gray-800 rounded" style="position:relative; overflow:hidden; border:1px solid #333;"></div>
+
+      <div id="map-categories-panel" style="display:none; position:fixed; top:56px; right:12px; z-index:2147483647; background:linear-gradient(180deg, rgba(2,6,23,0.9), rgba(2,6,23,0.8)); border:1px solid rgba(148,163,184,0.08); border-radius:10px; padding:10px; color:#e2e8f0;">
+        <div style="font-weight:600; margin-bottom:6px;">Marker Categories</div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <label><input type="checkbox" data-cat="location" checked/> Location</label>
+          <label><input type="checkbox" data-cat="home" checked/> Home</label>
+          <label><input type="checkbox" data-cat="feature" checked/> Feature</label>
+          <label><input type="checkbox" data-cat="character" checked/> Character</label>
+        </div>
+      </div>
+
+      <div id="map-marker-inspector" style="display:none; position:fixed; bottom:16px; left:16px; z-index:2147483647; min-width:260px; background:linear-gradient(180deg, rgba(2,6,23,0.8), rgba(2,6,23,0.6)); border:1px solid rgba(148,163,184,0.2); border-radius:12px; padding:10px; box-shadow:0 14px 40px rgba(2,6,23,0.6); color:#e2e8f0;">
+        <div style="font-weight:600; font-size:14px; margin-bottom:6px;">Marker</div>
+        <div style="display:grid; grid-template-columns:1fr; gap:8px;">
+          <div>
+            <label style="display:block; font-size:12px; color:#cbd5e1; margin-bottom:3px;">Label</label>
+            <input id="map-marker-label" type="text" style="width:100%; padding:6px 8px; background:#0b1220; color:#e2e8f0; border:1px solid #334155; border-radius:8px;"/>
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; color:#cbd5e1; margin-bottom:3px;">Linked Page</label>
+            <input id="map-marker-page" type="text" placeholder="optional" style="width:100%; padding:6px 8px; background:#0b1220; color:#e2e8f0; border:1px solid #334155; border-radius:8px;"/>
+          </div>
+          <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button id="map-marker-open" class="px-2 py-1 text-xs" style="background:#0f172a; color:#93c5fd; border:1px solid #334155; border-radius:8px;">Open</button>
+            <button id="map-marker-delete" class="px-2 py-1 text-xs" style="background:#7f1d1d; color:#fecaca; border:1px solid #7f1d1d; border-radius:8px;">Delete</button>
+            <button id="map-marker-close" class="px-2 py-1 text-xs" style="background:#111827; color:#cbd5e1; border:1px solid #334155; border-radius:8px;">Close</button>
+          </div>
+        </div>
+      </div>
 
       <!-- New Map Modal -->
       <div id="map-new-modal" style="display:none; position:fixed; inset:0; z-index:2147483647;">
@@ -413,6 +444,9 @@ function setupMapCanvas(container, mapObj, initialTool) {
   let isPanning = false, startX=0, startY=0, moved=false;
   let needsRedraw = false; let rafId = 0;
   container._mapTool = initialTool || container._mapTool || 'pan';
+  container._selectedMarkerId = container._selectedMarkerId || null;
+  // default visible categories
+  container._visibleCategories = container._visibleCategories || { location:true, home:true, feature:true, character:true };
 
   function resizeCanvas() {
     const rect = container.getBoundingClientRect();
@@ -428,8 +462,9 @@ function setupMapCanvas(container, mapObj, initialTool) {
     const ih = img.naturalHeight || (mapObj.imageSize && mapObj.imageSize.height) || canvas.height;
     img.width = iw * scale; img.height = ih * scale;
     ctx.drawImage(img, offsetX, offsetY, iw * scale, ih * scale);
-    // draw markers
+    // draw markers (respect visibility)
     (mapObj.markers||[]).forEach(m => {
+      if (!(container._visibleCategories && container._visibleCategories[m.type])) return;
       const px = offsetX + (m.x * iw) * scale;
       const py = offsetY + (m.y * ih) * scale;
       let color = 'rgba(59,130,246,0.9)';
@@ -439,6 +474,10 @@ function setupMapCanvas(container, mapObj, initialTool) {
       else if (m.type === 'location') color = 'rgba(59,130,246,0.95)';
       ctx.fillStyle = color;
       ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI*2); ctx.fill();
+      // label small
+      if (m.label) { ctx.fillStyle = '#e2e8f0'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(m.label, px, py - 12); }
+      // selection highlight
+      if (container._selectedMarkerId === m.id) { ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(px, py, 12, 0, Math.PI*2); ctx.stroke(); }
     });
   }
   function requestDraw(){
@@ -497,12 +536,85 @@ function setupMapCanvas(container, mapObj, initialTool) {
     const imgX = (x - offsetX) / scale;
     const imgY = (y - offsetY) / scale;
     const norm = { x: Math.max(0, Math.min(1, imgX / iw)), y: Math.max(0, Math.min(1, imgY / ih)) };
+    if (tool === 'select') {
+      // check for marker hit
+      const hit = hitMarkerAtClient(e.clientX, e.clientY);
+      if (hit) {
+        container._selectedMarkerId = hit.id; container._dragMarkerId = null;
+        // show inspector
+        const insp = document.getElementById('map-marker-inspector'); if (insp) insp.style.display = 'block';
+        const inLabel = document.getElementById('map-marker-label'); if (inLabel) inLabel.value = hit.label || '';
+        const inPage = document.getElementById('map-marker-page'); if (inPage) inPage.value = hit.linkedPage || '';
+        requestDraw();
+        return;
+      } else {
+        container._selectedMarkerId = null; const insp = document.getElementById('map-marker-inspector'); if (insp) insp.style.display = 'none'; requestDraw(); return;
+      }
+    }
     const id = 'm-'+Date.now();
     const marker = { id, type: tool, x: norm.x, y: norm.y, floor: 'ground', z: 0, label: 'New ' + tool.charAt(0).toUpperCase()+tool.slice(1), linkedPage: null, icon: 'default-pin', meta: {}, createdAt: new Date().toISOString() };
     mapObj.markers = mapObj.markers || []; mapObj.markers.push(marker);
     container._mapState = mapObj;
     requestDraw();
   });
+
+  // marker hit-testing
+  function hitMarkerAtClient(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect(); const x = clientX - rect.left; const y = clientY - rect.top;
+    const iw = img.naturalWidth || (mapObj.imageSize && mapObj.imageSize.width) || canvas.width;
+    const ih = img.naturalHeight || (mapObj.imageSize && mapObj.imageSize.height) || canvas.height;
+    let found = null;
+    (mapObj.markers||[]).forEach(m => {
+      if (!(container._visibleCategories && container._visibleCategories[m.type])) return;
+      const px = offsetX + (m.x * iw) * scale; const py = offsetY + (m.y * ih) * scale;
+      const dx = x - px; const dy = y - py; const r = 10;
+      if ((dx*dx + dy*dy) <= r*r) found = m;
+    });
+    return found;
+  }
+
+  // dragging selected marker
+  canvas.addEventListener('mousedown', (e)=>{
+    const tool = container._mapTool || 'pan';
+    if (tool === 'select') {
+      const hit = hitMarkerAtClient(e.clientX, e.clientY);
+      if (hit) { container._dragMarkerId = hit.id; container._dragOffset = { x: e.clientX, y: e.clientY }; }
+    }
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if (container._dragMarkerId) {
+      const mid = container._dragMarkerId; const iw = img.naturalWidth || (mapObj.imageSize && mapObj.imageSize.width) || canvas.width; const ih = img.naturalHeight || (mapObj.imageSize && mapObj.imageSize.height) || canvas.height;
+      const rect = canvas.getBoundingClientRect(); const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+      const imgX = (x - offsetX) / scale; const imgY = (y - offsetY) / scale; const norm = { x: Math.max(0, Math.min(1, imgX / iw)), y: Math.max(0, Math.min(1, imgY / ih)) };
+      const m = (mapObj.markers||[]).find(z => z.id === mid); if (m) { m.x = norm.x; m.y = norm.y; container._mapState = mapObj; try { localStorage.setItem('lastMapState', JSON.stringify(mapObj)); } catch(_){} requestDraw(); }
+    }
+  });
+  window.addEventListener('mouseup', ()=>{ if (container._dragMarkerId) { container._dragMarkerId = null; try { localStorage.setItem('lastMapState', JSON.stringify(mapObj)); } catch(_){} } });
+
+  // Inspector wiring
+  const markerClose = document.getElementById('map-marker-close');
+  const markerDelete = document.getElementById('map-marker-delete');
+  const markerOpen = document.getElementById('map-marker-open');
+  const markerLabelInput = document.getElementById('map-marker-label');
+  const markerPageInput = document.getElementById('map-marker-page');
+  if (markerClose) markerClose.addEventListener('click', ()=>{ const insp = document.getElementById('map-marker-inspector'); if (insp) insp.style.display='none'; container._selectedMarkerId=null; requestDraw(); });
+  if (markerDelete) markerDelete.addEventListener('click', ()=>{ const mid = container._selectedMarkerId; if (!mid) return; mapObj.markers = (mapObj.markers||[]).filter(m => m.id !== mid); container._selectedMarkerId = null; const insp = document.getElementById('map-marker-inspector'); if (insp) insp.style.display='none'; try { localStorage.setItem('lastMapState', JSON.stringify(mapObj)); } catch(_){} requestDraw(); });
+  if (markerOpen) markerOpen.addEventListener('click', ()=>{ const mid = container._selectedMarkerId; if (!mid) return; const m = (mapObj.markers||[]).find(z=>z.id===mid); if (!m || !m.linkedPage) return; try { const slug = encodeURIComponent(m.linkedPage.toString().trim().toLowerCase().replace(/\s+/g,'_')); location.hash = `#/page/${slug}`; } catch(_){ } });
+  if (markerLabelInput) markerLabelInput.addEventListener('input', ()=>{ const mid = container._selectedMarkerId; if (!mid) return; const m = (mapObj.markers||[]).find(z=>z.id===mid); if (!m) return; m.label = markerLabelInput.value || ''; try { localStorage.setItem('lastMapState', JSON.stringify(mapObj)); } catch(_){} requestDraw(); });
+  if (markerPageInput) markerPageInput.addEventListener('input', ()=>{ const mid = container._selectedMarkerId; if (!mid) return; const m = (mapObj.markers||[]).find(z=>z.id===mid); if (!m) return; m.linkedPage = markerPageInput.value ? markerPageInput.value.trim() : null; try { localStorage.setItem('lastMapState', JSON.stringify(mapObj)); } catch(_){} });
+
+  // Categories panel toggle & checkboxes
+  const catsToggle = container.parentElement && container.parentElement.querySelector && container.parentElement.querySelector('#map-cats-toggle');
+  const catsPanel = document.getElementById('map-categories-panel');
+  if (catsToggle) catsToggle.addEventListener('click', ()=>{ if (catsPanel) catsPanel.style.display = (catsPanel.style.display === 'none' ? 'block' : 'none'); });
+  if (catsPanel) {
+    catsPanel.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+      cb.addEventListener('change', ()=>{
+        const cat = cb.getAttribute('data-cat'); container._visibleCategories[cat] = cb.checked; try { localStorage.setItem('map_visible_cats', JSON.stringify(container._visibleCategories)); } catch(_){}
+        requestDraw();
+      });
+    });
+  }
 
   if (mapObj.imageUrl) {
     img.src = mapObj.imageUrl;
