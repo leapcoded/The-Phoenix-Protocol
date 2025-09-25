@@ -37,7 +37,21 @@ jobs:
           else
             sed -i "s|%%MEASUREMENT_ID%%||g" $file
           fi
-          echo "Final firebaseConfig.js:" && grep -E "apiKey|projectId|appId" $file || true
+          echo "Final firebaseConfig.js (sanitized view):"
+          grep -E "apiKey|authDomain|projectId|storageBucket|appId" $file || true
+
+      - name: Validate placeholder replacement
+        run: |
+          set -e
+          file=src/firebaseConfig.js
+          echo "Validating placeholders are gone"
+          if grep -q '%%API_KEY%%' $file; then echo 'ERROR: API_KEY placeholder not replaced'; exit 1; fi
+          if grep -q '%%AUTH_DOMAIN%%' $file; then echo 'ERROR: AUTH_DOMAIN placeholder not replaced'; exit 1; fi
+          if grep -q '%%PROJECT_ID%%' $file; then echo 'ERROR: PROJECT_ID placeholder not replaced'; exit 1; fi
+          if grep -q '%%STORAGE_BUCKET%%' $file; then echo 'ERROR: STORAGE_BUCKET placeholder not replaced'; exit 1; fi
+          if grep -q '%%MESSAGING_SENDER_ID%%' $file; then echo 'ERROR: MESSAGING_SENDER_ID placeholder not replaced'; exit 1; fi
+          if grep -q '%%APP_ID%%' $file; then echo 'ERROR: APP_ID placeholder not replaced'; exit 1; fi
+          echo "All placeholders replaced successfully."
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
